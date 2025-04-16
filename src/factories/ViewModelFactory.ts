@@ -12,40 +12,21 @@ import { TagSuggestionDelegate, TagSuggestionViewModel } from '@views/TagSuggest
 import { UpdatePageViewModel } from '@views/UpdatePageViewModel'
 import { UpdatePostViewModel } from '@views/UpdatePostViewModel'
 import { MarkdownView } from 'obsidian'
+import type MicroPlugin from '@base/MicroPlugin'
 
 export interface ViewModelFactoryInterface {
-
-    // Builds either the `PublishPostViewModel`, for publishing a note
-    // to Micro.blog, or the `UpdatePostViewModel`, to update a post.
-    makeSubmitPostViewModel(
-        markdownView: MarkdownView
-    ): PublishPostViewModel | UpdatePostViewModel
-
-    // Builds either the `PublishPageViewModel`, for publishing a page
-    // to Micro.blog, or the `UpdatePageViewModel`, to update a page.
-    makeSubmitPageViewModel(
-        markdownView: MarkdownView
-    ): PublishPageViewModel | UpdatePageViewModel
-
-    // Builds the `MicroPluginSettingsViewModel`, used by the plugin
-    // Settings.
+    makeSubmitPostViewModel(markdownView: MarkdownView): PublishPostViewModel | UpdatePostViewModel
+    makeSubmitPageViewModel(markdownView: MarkdownView): PublishPageViewModel | UpdatePageViewModel
     makeMicroPluginSettingsViewModel(): MicroPluginSettingsViewModel
-
-    // Builds the `TagSuggestionViewModel`.
     makeTagSuggestionViewModel(
         blogID: string,
         excluding: string[],
         delegate?: TagSuggestionDelegate
     ): TagSuggestionViewModel
-
-    // Builds the `MicropostViewModel`.
     makeMicropostViewModel(): MicropostViewModel
-
-    // Builds the Empty Post Error View Model.
     makeEmptyPostErrorViewModel(): ErrorViewModel
-
-    // Builds the Empty Page Error View Model.
     makeEmptyPageErrorViewModel(): ErrorViewModel
+    plugin: MicroPlugin // ✅ Exposed so view models can use it
 }
 
 /*
@@ -59,68 +40,45 @@ export class ViewModelFactory implements ViewModelFactoryInterface {
 
     private container: MicroPluginContainerInterface
     private serviceFactory: ServiceFactoryInterface
+    public plugin: MicroPlugin // ✅ Exposed publicly
 
     // Life cycle
 
-    constructor(
-        container: MicroPluginContainerInterface
-    ) {
+    constructor(container: MicroPluginContainerInterface) {
         this.container = container
+        this.plugin = container.plugin // ✅ Plugin access stored
         this.serviceFactory = new ServiceFactory(container)
     }
 
     // Public
 
-    public makeSubmitPostViewModel(
-        markdownView: MarkdownView
-    ): PublishPostViewModel | UpdatePostViewModel {
-        const frontmatterService = this.serviceFactory
-            .makeFrontmatterService(markdownView.file)
+    public makeSubmitPostViewModel(markdownView: MarkdownView): PublishPostViewModel | UpdatePostViewModel {
+        const frontmatterService = this.serviceFactory.makeFrontmatterService(markdownView.file)
 
-        const post = new MarkdownPost(
-            frontmatterService,
-            markdownView
-        )
+        const post = new MarkdownPost(frontmatterService, markdownView)
 
         if (post.url && post.url.length > 0) {
             return this.makeUpdatePostViewModel(
                 post.url,
                 post.title,
                 post.content,
-                post.tags || "",
+                post.tags || '',
                 frontmatterService
             )
         } else {
-            return this.makePublishPostViewModel(
-                post,
-                frontmatterService
-            )
+            return this.makePublishPostViewModel(post, frontmatterService)
         }
     }
 
-    public makeSubmitPageViewModel(
-        markdownView: MarkdownView
-    ): PublishPageViewModel | UpdatePageViewModel {
-        const frontmatterService = this.serviceFactory
-            .makeFrontmatterService(markdownView.file)
+    public makeSubmitPageViewModel(markdownView: MarkdownView): PublishPageViewModel | UpdatePageViewModel {
+        const frontmatterService = this.serviceFactory.makeFrontmatterService(markdownView.file)
 
-        const page = new MarkdownPage(
-            frontmatterService,
-            markdownView
-        )
+        const page = new MarkdownPage(frontmatterService, markdownView)
 
         if (page.url && page.url.length > 0) {
-            return this.makeUpdatePageViewModel(
-                page.url,
-                page.title,
-                page.content,
-                frontmatterService
-            )
+            return this.makeUpdatePageViewModel(page.url, page.title, page.content, frontmatterService)
         } else {
-            return this.makePublishPageViewModel(
-                page,
-                frontmatterService
-            )
+            return this.makePublishPageViewModel(page, frontmatterService)
         }
     }
 
@@ -136,19 +94,14 @@ export class ViewModelFactory implements ViewModelFactoryInterface {
     public makeTagSuggestionViewModel(
         blogID: string,
         excluding: string[],
-        delegate?: TagSuggestionDelegate,
+        delegate?: TagSuggestionDelegate
     ): TagSuggestionViewModel {
         const suggestions = this
             .synchronizedCategories(blogID)
-            .filter(element =>
-                !excluding.includes(element)
-            )
+            .filter(tag => !excluding.includes(tag))
             .sort()
 
-        const viewModel = new TagSuggestionViewModel(
-            suggestions
-        )
-
+        const viewModel = new TagSuggestionViewModel(suggestions)
         viewModel.delegate = delegate
 
         return viewModel
@@ -256,19 +209,11 @@ export class ViewModelFactory implements ViewModelFactoryInterface {
     // Return the categories for the selected blog.
     // In case the selected blog is the `default`, then show
     // all categories (removing duplicates).
-    private synchronizedCategories(
-        blogID: string
-    ): string[] {
-        const categories = this.container
-            .settings
-            .synchronizedCategories
+    private synchronizedCategories(blogID: string): string[] {
+        const categories = this.container.settings.synchronizedCategories
 
-        if (blogID == 'default') {
-            return Array.from(
-                new Set(
-                    Object.values(categories).flat()
-                )
-            )
+        if (blogID === 'default') {
+            return Array.from(new Set(Object.values(categories).flat()))
         } else {
             return categories[blogID]
         }

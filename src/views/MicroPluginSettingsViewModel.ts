@@ -1,202 +1,112 @@
 import MicroPlugin from '@base/MicroPlugin'
 import { ConfigResponse } from '@networking/ConfigResponse'
 import { NetworkClientInterface } from '@networking/NetworkClient'
-import { NetworkRequestFactoryInterface } from '@networking/NetworkRequestFactory'
+import { NetworkRequestFactory } from '@networking/NetworkRequestFactory'
 import { StoredSettings } from '@stores/StoredSettings'
+import { MicroPluginSettingsDelegate } from '../interfaces/MicroPluginSettingsDelegate'
 
 /*
- * `MicroPluginSettingsDelegate` Interface, implemented by
- * the object which needs to observe events from the view model.
- */
-export interface MicroPluginSettingsDelegate {
-
-    // Triggered when login fails.
-    loginDidFail(error: Error): void
-
-    // Triggered when the login succeeds.
-    loginDidSucceed(response: ConfigResponse): void
-
-    // Triggered logout succeeds.
-    logoutDidSucceed(): void
-
-    // Triggered when refreshing list of blogs fails.
-    refreshDidFail(error: Error): void
-
-    // Triggered when refreshing list of blogs succeeds.
-    refreshDidSucceed(response: ConfigResponse): void
-}
-
-/*
- * This view model drives the content and interactions with the
- * plugin settings view.
+ * View model for the plugin settings screen.
+ * Acts as a bridge between settings UI and plugin state.
  */
 export class MicroPluginSettingsViewModel {
+  public delegate?: MicroPluginSettingsDelegate
 
-    // Properties
+  public readonly plugin: MicroPlugin
+  public readonly blogs: Record<string, string>
+  public readonly appToken: string
+  public readonly tags: string
+  public readonly visibility: string
+  public readonly selectedBlogID: string
+  public readonly includePagesInNavigation: boolean
+  public readonly synchronizeCategoriesOnOpen: boolean
+  public readonly deleteAfterUpload: boolean
 
-    public delegate?: MicroPluginSettingsDelegate
-    private settings: StoredSettings
-    private networkClient: NetworkClientInterface
-    private networkRequestFactory: NetworkRequestFactoryInterface
-    readonly plugin: MicroPlugin
+  private client: NetworkClientInterface
+  private factory: NetworkRequestFactory
+  private settings: StoredSettings
 
-    // Life cycle
+  constructor(
+    plugin: MicroPlugin,
+    settings: StoredSettings,
+    client: NetworkClientInterface,
+    factory: NetworkRequestFactory
+  ) {
+    this.plugin = plugin
+    this.settings = settings
+    this.client = client
+    this.factory = factory
 
-    constructor(
-        plugin: MicroPlugin,
-        settings: StoredSettings,
-        networkClient: NetworkClientInterface,
-        networkRequestFactory: NetworkRequestFactoryInterface
-    ) {
-        this.plugin = plugin
-        this.settings = settings
-        this.networkClient = networkClient
-        this.networkRequestFactory = networkRequestFactory
+    this.blogs = settings.blogs
+    this.appToken = settings.appToken
+    this.tags = settings.defaultTags
+    this.visibility = settings.postVisibility
+    this.selectedBlogID = settings.selectedBlogID
+    this.includePagesInNavigation = settings.includePagesInNavigation
+    this.synchronizeCategoriesOnOpen = settings.synchronizeCategoriesOnOpen
+    this.deleteAfterUpload = settings.deleteAfterUpload ?? false
+  }
+
+  public get hasAppToken(): boolean {
+    return this.appToken.length > 0
+  }
+
+  /*
+   * Validates the app token and updates plugin settings if successful.
+   */
+  public async validate(): Promise<void> {
+    const request = this.factory.makeValidateAppTokenRequest(this.appToken)
+
+    try {
+      const response = await this.client.run<ConfigResponse>(request)
+
+      // Convert destination[] into blogs map
+      const blogs = Object.fromEntries(
+        (response.destination || []).map(dest => [dest.uid, dest.name])
+      )
+
+      await this.plugin.updateSetting('appToken', this.appToken)
+      await this.plugin.updateSetting('blogs', blogs)
+
+      this.delegate?.loginDidSucceed(response)
+    } catch (error: any) {
+      this.delegate?.loginDidFail(error)
     }
+  }
 
-    // Public
+  /*
+   * Logs the user out by clearing the stored token and blog list.
+   */
+  public async logout() {
+    await this.plugin.updateSetting('appToken', '')
+    await this.plugin.updateSetting('blogs', {})
+    this.delegate?.logoutDidSucceed()
+  }
 
-    public get hasAppToken(): boolean {
-        return this.settings.appToken.length > 0
+  /*
+   * Refreshes the list of available blogs.
+   */
+  public async refreshBlogs() {
+    const request = this.factory.makeValidateAppTokenRequest(this.appToken)
+
+    try {
+      const response = await this.client.run<ConfigResponse>(request)
+
+      const blogs = Object.fromEntries(
+        (response.destination || []).map(dest => [dest.uid, dest.name])
+      )
+
+      await this.plugin.updateSetting('blogs', blogs)
+      this.delegate?.refreshDidSucceed(response)
+    } catch (error: any) {
+      this.delegate?.refreshDidFail(error)
     }
+  }
 
-    public get appToken(): string {
-        return this.settings.appToken
-    }
-
-    public set appToken(value: string) {
-        this.settings.appToken = value
-        this.plugin.saveSettings()
-    }
-
-    public get tags(): string {
-        return this.settings.defaultTags
-    }
-
-    public set tags(value: string) {
-        this.settings.defaultTags = value
-        this.plugin.saveSettings()
-    }
-
-    public set synchronizedCategories(
-        value: Record<string, string[]>
-    ) {
-        this.settings.synchronizedCategories = value
-        this.plugin.saveSettings()
-    }
-
-    public get visibility(): string {
-        return this.settings.postVisibility
-    }
-
-    public set visibility(value: string) {
-        this.settings.postVisibility = value
-        this.plugin.saveSettings()
-    }
-
-    public get blogs(): Record<string, string> {
-        return this.settings.blogs
-    }
-
-    public set blogs(value: Record<string, string>) {
-        this.settings.blogs = value
-        this.plugin.saveSettings()
-    }
-
-    public get hasMultipleBlogs(): boolean {
-        return Object.keys(this.blogs).length > 2
-    }
-
-    public get selectedBlogID(): string {
-        return this.settings.selectedBlogID
-    }
-
-    public set selectedBlogID(value: string) {
-        this.settings.selectedBlogID = value
-        this.plugin.saveSettings()
-    }
-
-    public get includePagesInNavigation(): boolean {
-        return this.settings.includePagesInNavigation
-    }
-
-    public set includePagesInNavigation(value: boolean) {
-        this.settings.includePagesInNavigation = value
-        this.plugin.saveSettings()
-    }
-
-    public get synchronizeCategoriesOnOpen(): boolean {
-        return this.settings.synchronizeCategoriesOnOpen
-    }
-
-    public set synchronizeCategoriesOnOpen(value: boolean) {
-        this.settings.synchronizeCategoriesOnOpen = value
-        this.plugin.saveSettings()
-    }
-
-    public async validate() {
-        console.log('Logging in')
-
-        try {
-            const response = await this.networkClient.run<ConfigResponse>(
-                this.networkRequestFactory.makeConfigRequest()
-            )
-
-            this.blogs = MicroPluginSettingsViewModel.makeBlogSettings(response)
-            this.selectedBlogID = 'default'
-            this.delegate?.loginDidSucceed(response)
-            console.log('Login successful')
-        } catch (error) {
-            this.logout()
-            this.delegate?.loginDidFail(error)
-            console.log('Login error: ' + error)
-        }
-    }
-
-    public logout() {
-        this.appToken = ''
-        this.blogs = {}
-        this.tags = ''
-        this.selectedBlogID = 'default'
-        this.visibility = 'draft'
-        this.synchronizedCategories = {}
-        this.includePagesInNavigation = false
-        this.synchronizeCategoriesOnOpen = true
-
-        this.delegate?.logoutDidSucceed()
-        console.log('Logout successful')
-    }
-
-    public async refreshBlogs() {
-        console.log('Refreshing blogs')
-
-        try {
-            const response = await this.networkClient.run<ConfigResponse>(
-                this.networkRequestFactory.makeConfigRequest()
-            )
-
-            this.blogs = MicroPluginSettingsViewModel.makeBlogSettings(response)
-            this.delegate?.refreshDidSucceed(response)
-            console.log('Refresh successful')
-        } catch (error) {
-            this.delegate?.refreshDidFail(error)
-            console.log('Refresh failed: ' + error)
-        }
-    }
-
-    // Private
-
-    private static makeBlogSettings(
-        response: ConfigResponse
-    ): { [uid: string]: string } {
-        const blogs: { [uid: string]: string } = {}
-
-        blogs['default'] = 'Default'
-
-        response.destination?.forEach(blog => {
-            blogs[blog.uid] = blog.name
-        })
-
-        return blogs
-    }
+  /*
+   * Updates the delete-after-upload setting.
+   */
+  public async setDeleteAfterUpload(value: boolean) {
+    await this.plugin.updateSetting('deleteAfterUpload', value)
+  }
 }

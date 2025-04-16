@@ -1,42 +1,21 @@
 import { PublishResponse } from '@networking/PublishResponse'
 import { PublishPostViewModel, PublishPostViewModelDelegate } from '@views/PublishPostViewModel'
 import { TagSuggestionView } from '@views/TagSuggestionView'
-import { App, Modal, Setting } from 'obsidian'
+import { App, Modal, Notice, Setting, TFile, normalizePath } from 'obsidian'
 
-/*
- * `PublishPostView` subclasses `Modal` and is presented via Obsidian's
- * Command Palette.
- *
- * The data used to populate this view and all interactions with the
- * view are handled by the view's view model. All this view does is call
- * methods on the view model and observe changes (via delegate) so it
- * can react appropriately.
- */
 export class PublishPostView extends Modal implements PublishPostViewModelDelegate {
-
-    // Properties
-
     private viewModel: PublishPostViewModel
 
-    // Life cycle
-
-    constructor(
-        viewModel: PublishPostViewModel,
-        app: App
-    ) {
+    constructor(viewModel: PublishPostViewModel, app: App) {
         super(app)
-
         this.viewModel = viewModel
         this.viewModel.delegate = this
     }
-
-    // Public
 
     public onOpen() {
         super.onOpen()
 
         const { contentEl } = this
-
         contentEl.empty()
         contentEl.createEl('h2', { text: 'Review' })
 
@@ -106,7 +85,7 @@ export class PublishPostView extends Modal implements PublishPostViewModelDelega
 
         new Setting(contentEl)
             .setName('Scheduled date')
-            .setDesc('The inclusion of this date is optional, and it serves the purpose of scheduling posts for future publication. If left blank, the system will default to the current date and time. Please use the following format: YYYY-MM-DD HH:MM.')
+            .setDesc('Optional date for scheduling posts. Format: YYYY-MM-DD HH:MM.')
             .addText(text => text
                 .setPlaceholder('YYYY-MM-DD HH:MM')
                 .setValue(this.viewModel.scheduledDate)
@@ -143,14 +122,10 @@ export class PublishPostView extends Modal implements PublishPostViewModelDelega
 
     public onClose() {
         super.onClose()
-
         const { contentEl } = this
         contentEl.empty()
-
         this.viewModel.delegate = undefined
     }
-
-    // PublishPostViewModelDelegate
 
     public publishDidClearTitle() {
         this.onOpen()
@@ -160,21 +135,43 @@ export class PublishPostView extends Modal implements PublishPostViewModelDelega
         this.onOpen()
     }
 
-    public publishDidSucceed(
-        response: PublishResponse
-    ) {
-        this.makeConfirmationView(
-            response
-        )
+    public async publishDidSucceed(response: PublishResponse) {
+        this.makeConfirmationView(response)
+
+        const url = response.url
+
+        // Extract date + slug (e.g., /2025/04/14/this-is-my-post.html)
+        const match = url.match(/\/(\d{4})\/(\d{2})\/(\d{2})\/([^\/?#]+)(?:\?.*)?$/)
+        if (match) {
+            const [, year, month, day, rawSlug] = match
+            const datePrefix = `${year}-${month}-${day}`
+            const cleanSlug = rawSlug.replace(/\.[^/.]+$/, '') // remove .html
+            const newBaseName = `${datePrefix}_${cleanSlug}`
+
+            const file = this.app.workspace.getActiveFile()
+            if (file instanceof TFile) {
+                const newFileName = `${newBaseName}.${file.extension}`
+                const newPath = normalizePath(file.path.replace(file.name, newFileName))
+
+                try {
+                    await this.app.vault.rename(file, newPath)
+                    new Notice(`Note renamed to ${newFileName}`)
+
+                    // Reopen renamed file
+                    const newFile = this.app.vault.getAbstractFileByPath(newPath)
+                    if (newFile instanceof TFile) {
+                        await this.app.workspace.getLeaf(true).openFile(newFile)
+                    }
+                } catch (err) {
+                    console.error("Failed to rename file:", err)
+                    new Notice("Failed to rename the file after publishing.")
+                }
+            }
+        }
     }
 
-    public publishDidFail(
-        error: Error
-    ) {
-        this.makeMessageView(
-            'Error',
-            error.message
-        )
+    public publishDidFail(error: Error) {
+        this.makeMessageView('Error', error.message)
     }
 
     public publishDidSelectTag() {
@@ -185,29 +182,18 @@ export class PublishPostView extends Modal implements PublishPostViewModelDelega
         this.onOpen()
     }
 
-    // Private
-
-    private makeConfirmationView(
-        response: PublishResponse
-    ) {
+    private makeConfirmationView(response: PublishResponse) {
         const { contentEl } = this
-
         contentEl.empty()
-
         contentEl.createEl('h2', { text: 'Published' })
         contentEl.createEl('a', { text: 'Open post URL', href: response.url })
         contentEl.createEl('br')
         contentEl.createEl('a', { text: 'Open post Preview URL', href: response.preview })
     }
 
-    private makeMessageView(
-        title: string,
-        message: string
-    ) {
+    private makeMessageView(title: string, message: string) {
         const { contentEl } = this
-
         contentEl.empty()
-
         contentEl.createEl('h2', { text: title })
         contentEl.createEl('p', { text: message })
     }

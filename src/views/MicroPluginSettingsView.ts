@@ -1,220 +1,212 @@
-import { ConfigResponse } from '@networking/ConfigResponse'
-import { MicroPluginSettingsDelegate, MicroPluginSettingsViewModel } from '@views/MicroPluginSettingsViewModel'
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian'
+import { MicroPluginSettingsDelegate } from '../interfaces/MicroPluginSettingsDelegate'
+import { MicroPluginSettingsViewModel } from './MicroPluginSettingsViewModel'
 
-/*
- * `MicroPluginSettingsView` subclasses `PluginSettingTab`, and is presented via
- * Obsidian's Settings Window.
- *
- * The data used to populate this view and all the interaction with the
- * view is handled by the view's view model. All this view does is to call
- * methods on the view model and observe (via delegate) changes so it
- * can react properly.
- */
 export class MicroPluginSettingsView extends PluginSettingTab implements MicroPluginSettingsDelegate {
+  private viewModel: MicroPluginSettingsViewModel
 
-    // Properties
+  constructor(viewModel: MicroPluginSettingsViewModel, app: App) {
+    super(app, viewModel.plugin)
+    this.viewModel = viewModel
+  }
 
-    private viewModel: MicroPluginSettingsViewModel
+  public display() {
+    this.viewModel.delegate = this
 
-    // Life cycle
+    const plugin = this.viewModel.plugin
+    const { containerEl } = this
+    containerEl.empty()
 
-    constructor(
-        viewModel: MicroPluginSettingsViewModel,
-        app: App
-    ) {
-        super(app, viewModel.plugin)
-
-        this.viewModel = viewModel
+    if (!this.viewModel.hasAppToken) {
+      this.makeLoginView()
+      return
     }
 
-    // Public
+    // Blog
+    containerEl.createEl('h2', { text: 'Blog' })
 
-    public display() {
-        this.viewModel.delegate = this
+    new Setting(containerEl)
+      .setName('Blog')
+      .setDesc('Default blog for new posts and pages.')
+      .addDropdown(dropDown =>
+        dropDown
+          .addOptions(this.viewModel.blogs)
+          .setValue(plugin.getSetting('selectedBlogID') ?? 'default')
+          .onChange(async value => {
+            await plugin.updateSetting('selectedBlogID', value)
+          })
+      )
+      .addExtraButton(button =>
+        button
+          .setIcon('sync')
+          .setTooltip('Refresh blogs')
+          .onClick(async () => {
+            button.setDisabled(true)
+            await this.viewModel.refreshBlogs()
+          })
+      )
 
-        if (!this.viewModel.hasAppToken) {
-            this.makeLoginView()
-        } else {
-            this.makeSettingsView()
-        }
-    }
+    // Posts
+    containerEl.createEl('h2', { text: 'Posts' })
 
-    public hide() {
-        super.hide()
+    new Setting(containerEl)
+      .setName('Categories')
+      .setDesc('Default list of categories for new posts.')
+      .addText(text =>
+        text
+          .setPlaceholder('category1, category2')
+          .setValue(plugin.getSetting('defaultTags') ?? '')
+          .onChange(async value => {
+            await plugin.updateSetting('defaultTags', value)
+          })
+      )
 
-        this.viewModel.delegate = undefined
-    }
+    new Setting(containerEl)
+      .setName('Visibility')
+      .setDesc('Default visibility for new posts.')
+      .addDropdown(dropDown =>
+        dropDown
+          .addOption('draft', 'Draft')
+          .addOption('published', 'Public')
+          .setValue(plugin.getSetting('postVisibility') ?? 'draft')
+          .onChange(async value => {
+            await plugin.updateSetting('postVisibility', value)
+          })
+      )
 
-    // MicroPluginSettingsDelegate
+    // Pages
+    containerEl.createEl('h2', { text: 'Pages' })
 
-    public loginDidSucceed(
-        _response: ConfigResponse
-    ) {
-        this.display()
+    new Setting(containerEl)
+      .setName('Navigation')
+      .setDesc('Include new pages in blog navigation.')
+      .addToggle(toggle =>
+        toggle
+          .setValue(plugin.getSetting('includePagesInNavigation') ?? false)
+          .onChange(async value => {
+            await plugin.updateSetting('includePagesInNavigation', value)
+          })
+      )
 
-        new Notice(
-            'Micro.blog login succeeded'
-        )
-    }
+    // Misc
+    containerEl.createEl('h2', { text: 'Misc.' })
 
-    public loginDidFail(
-        _error: Error
-    ) {
-        this.display()
+    new Setting(containerEl)
+      .setName('Categories synchronization')
+      .setDesc('Sync categories when Obsidian opens.')
+      .addToggle(toggle =>
+        toggle
+          .setValue(plugin.getSetting('synchronizeCategoriesOnOpen') ?? true)
+          .onChange(async value => {
+            await plugin.updateSetting('synchronizeCategoriesOnOpen', value)
+          })
+      )
 
-        new Notice(
-            'Micro.blog login failed'
-        )
-    }
+    new Setting(containerEl)
+      .setName('Delete images after upload')
+      .setDesc('Removes local image file after uploading to Micro.blog.')
+      .addToggle(toggle =>
+        toggle
+          .setValue(plugin.getSetting('deleteAfterUpload') ?? false)
+          .onChange(async value => {
+            await plugin.updateSetting('deleteAfterUpload', value)
+          })
+      )
 
-    public logoutDidSucceed() {
-        this.display()
-    }
+    new Setting(containerEl)
+      .setName('Rename note after publishing')
+      .setDesc('Automatically rename the note based on the Micro.blog URL.')
+      .addToggle(toggle =>
+        toggle
+          .setValue(plugin.getSetting('renameNoteAfterPublish') ?? false)
+          .onChange(async value => {
+            await plugin.updateSetting('renameNoteAfterPublish', value)
+          })
+      )
 
-    public refreshDidFail(
-        _error: Error
-    ) {
-        this.display()
+    new Setting(containerEl)
+      .setName('ChatGPT API Key (for alt text)')
+      .setDesc('Used to generate AI-based alt text for uploaded images.')
+      .addText(text =>
+        text
+          .setPlaceholder('sk-...')
+          .setValue(plugin.getSetting('chatGPTApiKey') ?? '')
+          .onChange(async value => {
+            await plugin.updateSetting('chatGPTApiKey', value)
+          })
+      )
 
-        new Notice(
-            'Blogs refresh failed'
-        )
-    }
+    // Sponsor
+    new Setting(containerEl)
+      .setName('Sponsor')
+      .setDesc('Enjoying this plugin? Show your support ☕')
+      .addButton(button => {
+        button.buttonEl.outerHTML =
+          '<a href="https://ko-fi.com/otaviocc" target="_blank"><img height="36" style="border:0px;height:36px;" src="https://storage.ko-fi.com/cdn/kofi3.png?v=3" border="0" alt="Buy Me a Coffee at ko-fi.com" /></a>'
+      })
 
-    public refreshDidSucceed(
-        _response: ConfigResponse
-    ) {
-        this.display()
+    new Setting(containerEl)
+      .addButton(button =>
+        button
+          .setButtonText('Log out')
+          .setCta()
+          .onClick(() => {
+            this.viewModel.logout()
+          })
+      )
+  }
 
-        new Notice(
-            'Blog(s) refreshed'
-        )
-    }
+  private makeLoginView() {
+    const { containerEl } = this
+    containerEl.empty()
 
-    // Private
+    new Setting(containerEl)
+      .setName('App Token')
+      .setDesc("Visit Micro.blog's Account page to generate one.")
+      .addText(text =>
+        text
+          .setPlaceholder('Enter app token')
+          .setValue(this.viewModel.appToken)
+          .onChange(() => {})
+      )
 
-    private makeLoginView() {
-        const { containerEl } = this
+    new Setting(containerEl)
+      .addButton(button =>
+        button
+          .setButtonText('Log in')
+          .setCta()
+          .onClick(async () => {
+            button.setDisabled(true)
+            button.removeCta()
+            button.setButtonText('Logging in...')
+            await this.viewModel.validate()
+          })
+      )
+  }
 
-        containerEl.empty()
+  // Required delegate methods from MicroPluginSettingsDelegate
 
-        new Setting(containerEl)
-            .setName('App Token')
-            .setDesc('Visit Micro.blog\'s Account page to generate one.')
-            .addText(text => text
-                .setPlaceholder('Enter app token')
-                .setValue(this.viewModel.appToken)
-                .onChange(value => {
-                    this.viewModel.appToken = value
-                })
-            )
+  public loginDidSucceed(): void {
+    this.display()
+    new Notice('Micro.blog login succeeded.')
+  }
 
-        new Setting(containerEl)
-            .addButton(button => button
-                .setButtonText('Log in')
-                .setCta()
-                .onClick(async _ => {
-                    button
-                        .setDisabled(true)
-                        .removeCta()
-                        .setButtonText('Logging in...')
+  public loginDidFail(): void {
+    this.display()
+    new Notice('Micro.blog login failed.')
+  }
 
-                    await this.viewModel.validate()
-                })
-            )
-    }
+  public logoutDidSucceed(): void {
+    this.display()
+  }
 
-    private makeSettingsView() {
-        const { containerEl } = this
+  public refreshDidSucceed(): void {
+    this.display()
+    new Notice('Blog list refreshed.')
+  }
 
-        containerEl.empty()
-        containerEl.createEl('h2', { text: 'Blog' })
-
-        new Setting(containerEl)
-            .setName('Blog')
-            .setDesc('Default blog for new posts and pages.')
-            .addDropdown(dropDown => dropDown
-                .addOptions(this.viewModel.blogs)
-                .setValue(this.viewModel.selectedBlogID)
-                .onChange(value => {
-                    this.viewModel.selectedBlogID = value
-                })
-            )
-            .addExtraButton(button => button
-                .setIcon('sync')
-                .setTooltip('Refresh blogs')
-                .onClick(async () => {
-                    button
-                        .setDisabled(true)
-
-                    await this.viewModel.refreshBlogs()
-                })
-            )
-
-        containerEl.createEl('h2', { text: 'Posts' })
-
-        new Setting(containerEl)
-            .setName('Categories')
-            .setDesc('Default list of categories for new posts.')
-            .addText(text => text
-                .setPlaceholder('category1, category2, category3')
-                .setValue(this.viewModel.tags)
-                .onChange(value => {
-                    this.viewModel.tags = value
-                })
-            )
-
-        new Setting(containerEl)
-            .setName('Visibility')
-            .setDesc('Default visibility for new posts.')
-            .addDropdown(dropDown => dropDown
-                .addOption('draft', 'Draft')
-                .addOption('published', 'Public')
-                .setValue(this.viewModel.visibility)
-                .onChange(value => {
-                    this.viewModel.visibility = value
-                })
-            )
-
-        containerEl.createEl('h2', { text: 'Pages' })
-
-        new Setting(containerEl)
-            .setName('Navigation')
-            .setDesc('Default navigation value. Toggle on to automatically include new pages in the blog\'s navigation.')
-            .addToggle(toggle => toggle
-                .setValue(this.viewModel.includePagesInNavigation)
-                .onChange(value => {
-                    this.viewModel.includePagesInNavigation = value
-                })
-            )
-
-        containerEl.createEl('h2', { text: 'Misc.' })
-
-        new Setting(containerEl)
-            .setName('Categories synchronization')
-            .setDesc('Toggle on to automatically synchronize categories when Obsidian opens.')
-            .addToggle(toggle => toggle
-                .setValue(this.viewModel.synchronizeCategoriesOnOpen)
-                .onChange(value => {
-                    this.viewModel.synchronizeCategoriesOnOpen = value
-                })
-            )
-
-        new Setting(this.containerEl)
-            .setName('Sponsor')
-            .setDesc('Enjoying this plugin? Show your appreciation with a cup of coffee! 😊☕')
-            .addButton(button =>
-                button.buttonEl.outerHTML = '<a href="https://ko-fi.com/otaviocc" target="_blank"><img height="36" style="border:0px;height:36px;" src="https://storage.ko-fi.com/cdn/kofi3.png?v=3" border="0" alt="Buy Me a Coffee at ko-fi.com" /></a>'
-            )
-
-        new Setting(containerEl)
-            .addButton(button => button
-                .setButtonText('Log out')
-                .setCta()
-                .onClick(_ => {
-                    this.viewModel.logout()
-                })
-            )
-    }
+  public refreshDidFail(): void {
+    this.display()
+    new Notice('Failed to refresh blog list.')
+  }
 }

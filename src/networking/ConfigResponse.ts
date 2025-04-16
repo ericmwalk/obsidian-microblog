@@ -1,8 +1,8 @@
 /*
  * Response of the `/micropub?q=config` network request.
  */
-export type ConfigResponse = {
-    destination?: ConfigDestinationResponse[]
+export interface ConfigResponse {
+  destination: ConfigDestinationResponse[]
 }
 
 export type ConfigDestinationResponse = {

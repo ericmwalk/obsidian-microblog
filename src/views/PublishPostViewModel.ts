@@ -4,33 +4,18 @@ import { NetworkRequestFactoryInterface } from '@networking/NetworkRequestFactor
 import { PublishResponse } from '@networking/PublishResponse'
 import { FrontmatterServiceInterface } from '@services/FrontmatterService'
 import { TagSuggestionDelegate, TagSuggestionViewModel } from '@views/TagSuggestionViewModel'
+import { Notice, normalizePath, TFile } from 'obsidian'
 
 /*
  * `PublishPostViewModelDelegate` interface, implemented by
  * the object that needs to observe events from the view model.
  */
 export interface PublishPostViewModelDelegate {
-
-    // Triggered when user clicks the delete button when the
-    // title property is reset.
     publishDidClearTitle(): void
-
-    // Triggered when user clicks the clear button when the
-    // date property is reset.
     publishDidClearDate(): void
-
-    // Triggered when publishing a new post succeeds.
     publishDidSucceed(response: PublishResponse): void
-
-    // Triggered when publishing a new post fails.
     publishDidFail(error: Error): void
-
-    // Triggered when selecting a tag from the picker.
     publishDidSelectTag(): void
-
-    // Triggered after checking whether the scheduled date
-    // is valid or not. It returns `true` for no date or for
-    // valid date, and false for invalid dates.
     publishDidValidateDate(): void
 }
 
@@ -39,9 +24,6 @@ export interface PublishPostViewModelDelegate {
  * publish post view.
  */
 export class PublishPostViewModel implements TagSuggestionDelegate {
-
-    // Properties
-
     public delegate?: PublishPostViewModelDelegate
     private isValidDate: boolean
     private isSubmitting: boolean
@@ -56,8 +38,6 @@ export class PublishPostViewModel implements TagSuggestionDelegate {
     private networkRequestFactory: NetworkRequestFactoryInterface
     private viewModelFactory: ViewModelFactoryInterface
     readonly blogs: Record<string, string>
-
-    // Life cycle
 
     constructor(
         title: string,
@@ -85,8 +65,6 @@ export class PublishPostViewModel implements TagSuggestionDelegate {
         this.networkRequestFactory = networkRequestFactory
         this.viewModelFactory = viewModelFactory
     }
-
-    // Public
 
     public get title(): string {
         return this.titleWrappedValue
@@ -164,13 +142,25 @@ export class PublishPostViewModel implements TagSuggestionDelegate {
                 this.formattedScheduledDate()
             )
 
-            const result = await this.networkClient.run<PublishResponse>(
-                response
-            )
+            const result = await this.networkClient.run<PublishResponse>(response)
 
             this.frontmatterService.save(this.title, 'title')
             this.frontmatterService.save(result.url, 'url')
             this.frontmatterService.save(tags, 'tags')
+
+            // 🆕 Rename the note if setting is enabled
+            const plugin = this.viewModelFactory.plugin
+            const shouldRename = plugin.getSetting('renameNoteAfterPublish')
+
+            if (shouldRename) {
+                const activeFile = plugin.app.workspace.getActiveFile()
+                if (activeFile) {
+                    const newName = this.generateNoteNameFromUrl(result.url)
+                    const newPath = normalizePath(`${activeFile.parent?.path ?? ''}/${newName}.md`)
+                    await plugin.app.fileManager.renameFile(activeFile, newPath)
+                    new Notice(`Note renamed to: ${newName}`)
+                }
+            }
 
             this.delegate?.publishDidSucceed(result)
         } catch (error) {
@@ -183,51 +173,47 @@ export class PublishPostViewModel implements TagSuggestionDelegate {
         this.delegate?.publishDidClearTitle()
     }
 
-    public suggestionsViewModel(): TagSuggestionViewModel {
-        const excluding = this.tags.validValues()
-
-        return this.viewModelFactory.makeTagSuggestionViewModel(
-            this.selectedBlogID,
-            excluding,
-            this
-        )
-    }
-
     public clearDate() {
         this.scheduledDateWrappedValue = ''
         this.isValidDate = true
         this.delegate?.publishDidClearDate()
     }
 
+    public suggestionsViewModel(): TagSuggestionViewModel {
+        const excluding = this.tags.validValues()
+        return this.viewModelFactory.makeTagSuggestionViewModel(this.selectedBlogID, excluding, this)
+    }
+
     // Private
 
     private isValidScheduledDate(): boolean {
         const scheduledDate = new Date(this.scheduledDateWrappedValue)
-        const isInvalidDate = isNaN(scheduledDate.getTime())
-
-        if (this.scheduledDateWrappedValue.length > 0 && isInvalidDate) {
-            return false
-        }
-
-        return true
+        return !(this.scheduledDateWrappedValue.length > 0 && isNaN(scheduledDate.getTime()))
     }
 
     private formattedScheduledDate(): string {
         const scheduledDate = new Date(this.scheduledDateWrappedValue.trim())
-        const isInvalidDate = isNaN(scheduledDate.getTime())
+        return isNaN(scheduledDate.getTime()) ? '' : scheduledDate.toISOString()
+    }
 
-        if (isInvalidDate) {
-            return ''
+    private generateNoteNameFromUrl(url: string): string {
+        try {
+            const u = new URL(url)
+            const parts = u.pathname.split('/').filter(Boolean)
+            if (parts.length >= 3) {
+                const [year, month, day, ...slugParts] = parts
+                const slug = slugParts.join('-') || parts.at(-1) || 'post'
+                return `${year}-${month}-${day}_${slug.replace(/\.html$/, '')}`
+            }
+            return 'published-note'
+        } catch {
+            return 'published-note'
         }
-
-        return scheduledDate.toISOString()
     }
 
     // TagSuggestionDelegate
 
-    public tagSuggestionDidSelectTag(
-        category: string
-    ) {
+    public tagSuggestionDidSelectTag(category: string) {
         const tags = this.tags.validValues()
         tags.push(category)
 

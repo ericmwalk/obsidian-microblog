@@ -31,6 +31,17 @@ export interface StoredSettings {
     // Boolean indicating if the plugin should synchronize
     // the list of categories when Obsidian opens.
     synchronizeCategoriesOnOpen: boolean
+
+    // Boolean indicating if the plugin should keep
+    // the setting to delete after upload or not.
+    deleteAfterUpload: boolean
+
+    // Boolean indicating if the plugin should rename the note
+    renameNoteAfterPublish: boolean
+  
+    // To store the ChatGPT Key
+    chatGPTApiKey: string
+
 }
 
 // Default values for the plugin.
@@ -42,5 +53,9 @@ export const defaultSettings: StoredSettings = {
     selectedBlogID: 'default',
     synchronizedCategories: {},
     includePagesInNavigation: false,
-    synchronizeCategoriesOnOpen: true
+    synchronizeCategoriesOnOpen: true,
+    deleteAfterUpload: false, // Added for delete after upload
+    renameNoteAfterPublish: false, // Added for note rename
+    chatGPTApiKey: '' // Added for AltText for Image
+
 }

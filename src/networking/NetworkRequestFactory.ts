@@ -44,6 +44,11 @@ export interface NetworkRequestFactoryInterface {
         content: string,
         tags?: string[]
     ): NetworkRequest
+
+    // ✅ NEW: Validates an app token by hitting the config endpoint
+    makeValidateAppTokenRequest(
+        token: string
+    ): NetworkRequest
 }
 
 /*
@@ -81,7 +86,7 @@ export class NetworkRequestFactory implements NetworkRequestFactoryInterface {
         }
     }
 
-    makePublishPageRequest(
+    public makePublishPageRequest(
         title: string,
         content: string,
         blogID: string,
@@ -147,6 +152,22 @@ export class NetworkRequestFactory implements NetworkRequestFactoryInterface {
             path: '/micropub',
             method: 'POST',
             body: body
+        }
+    }
+
+    // ✅ NEW: Used for validating app token and pulling blog list
+    public makeValidateAppTokenRequest(
+        token: string
+    ): NetworkRequest {
+        return {
+            path: '/micropub',
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token}`
+            },
+            parameters: new URLSearchParams([
+                ['q', 'config']
+            ])
         }
     }
 }

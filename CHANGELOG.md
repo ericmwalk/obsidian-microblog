@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [3.0.0] - 2025-04-15
+### Added
+- Rename Note to match with published url (e.g., {date}_{slug})
+- Image upload support where you can keep the local image after upload or delete it (however at this time it will rename the link in the note to the online one to ensure if you reupload the note it won't upload the image again)
+- Support for AltImage using ChatGPT (this requires a ChatGPT API)
 
 ## [2.7.0] - 2024-06-05
 ### Improved
