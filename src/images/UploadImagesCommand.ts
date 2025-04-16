@@ -89,7 +89,7 @@ export async function uploadAndReplaceImages(
         continue;
       }
 
-      // 🧠 GPT-4 Vision Alt text using actual uploaded image location
+      // 🧠 GPT-4o Alt text using actual uploaded image location
       let altText = generateBasicAltText(filename);
       if (useChatGPT && chatGPTApiKey && location) {
         try {
