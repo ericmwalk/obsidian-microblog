@@ -148,7 +148,7 @@ export class PublishPostViewModel implements TagSuggestionDelegate {
             this.frontmatterService.save(result.url, 'url')
             this.frontmatterService.save(tags, 'tags')
 
-            // 🆕 Rename the note if setting is enabled
+            // Rename the note if setting is enabled
             const plugin = this.viewModelFactory.plugin
             const shouldRename = plugin.getSetting('renameNoteAfterPublish')
 
