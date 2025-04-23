@@ -26,7 +26,7 @@ export interface ViewModelFactoryInterface {
     makeMicropostViewModel(): MicropostViewModel
     makeEmptyPostErrorViewModel(): ErrorViewModel
     makeEmptyPageErrorViewModel(): ErrorViewModel
-    plugin: MicroPlugin // ✅ Exposed so view models can use it
+    plugin: MicroPlugin 
 }
 
 /*
@@ -40,13 +40,13 @@ export class ViewModelFactory implements ViewModelFactoryInterface {
 
     private container: MicroPluginContainerInterface
     private serviceFactory: ServiceFactoryInterface
-    public plugin: MicroPlugin // ✅ Exposed publicly
+    public plugin: MicroPlugin 
 
     // Life cycle
 
     constructor(container: MicroPluginContainerInterface) {
         this.container = container
-        this.plugin = container.plugin // ✅ Plugin access stored
+        this.plugin = container.plugin 
         this.serviceFactory = new ServiceFactory(container)
     }
 
