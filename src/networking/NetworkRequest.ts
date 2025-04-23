@@ -8,6 +8,6 @@ export type NetworkRequest = {
     parameters?: URLSearchParams
     method: string
     body?: string
-    headers?: Record<string, string>; // ✅ Add this line
+    headers?: Record<string, string>; // Added this line
 
 }
