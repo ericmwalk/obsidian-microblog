@@ -89,7 +89,7 @@ export async function uploadAndReplaceImages(
         continue;
       }
 
-      // 🧠 GPT-4o Alt text using actual uploaded image location
+      // GPT-4o Alt text using actual uploaded image location
       let altText = generateBasicAltText(filename);
       if (useChatGPT && chatGPTApiKey && location) {
         try {
@@ -124,11 +124,11 @@ export async function uploadAndReplaceImages(
             })
           });
 
-          console.log("🔍 GPT raw response:", chatRes.text);
+          console.log("GPT raw response:", chatRes.text);
           const gpt = JSON.parse(chatRes.text);
           altText = gpt.choices?.[0]?.message?.content?.trim() || altText;
         } catch (err) {
-          console.warn(`⚠️ GPT fallback alt text used for ${filename}`);
+          console.warn(`GPT fallback alt text used for ${filename}`);
           console.error("GPT-4 Vision error:", err);
         }
       }
